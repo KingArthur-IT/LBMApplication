@@ -31,10 +31,10 @@ class Shaders{
     constructor(contex) {
         this.gl = contex;
         //shaders
-        let vertexShader    = this.compileShader(this.gl.VERTEX_SHADER, this.vertexShaderCode);
-        let initializeDistribution0Shader     = this.compileShader(this.gl.FRAGMENT_SHADER, this.initializeDistribution0ShaderCode);
-        let initializeDistribution1Shader     = this.compileShader(this.gl.FRAGMENT_SHADER, this.initializeDistribution1ShaderCode);
-        let initializeDistribution2Shader     = this.compileShader(this.gl.FRAGMENT_SHADER, this.initializeDistribution2ShaderCode);
+        let vertexShader                    = this.compileShader(this.gl.VERTEX_SHADER, this.vertexShaderCode);
+        let initializeDistribution0Shader   = this.compileShader(this.gl.FRAGMENT_SHADER, this.initializeDistribution0ShaderCode);
+        let initializeDistribution1Shader   = this.compileShader(this.gl.FRAGMENT_SHADER, this.initializeDistribution1ShaderCode);
+        let initializeDistribution2Shader   = this.compileShader(this.gl.FRAGMENT_SHADER, this.initializeDistribution2ShaderCode);
         
         let calculateVelocityDencityShader   = this.compileShader(this.gl.FRAGMENT_SHADER, this.calculateVelocityDencityShaderCode);
         
@@ -48,7 +48,6 @@ class Shaders{
         let outletBC0Shader   = this.compileShader(this.gl.FRAGMENT_SHADER, this.OutletBC0ShaderCode);
         let outletBC1Shader   = this.compileShader(this.gl.FRAGMENT_SHADER, this.OutletBC1ShaderCode);
         let outletBC2Shader = this.compileShader(this.gl.FRAGMENT_SHADER, this.OutletBC2ShaderCode);
-        let fluxVelShader         = this.compileShader(this.gl.FRAGMENT_SHADER, this.FluxVelocityShaderCode);
         let flux1Shader         = this.compileShader(this.gl.FRAGMENT_SHADER, this.FluxBC1ShaderCode);
         let flux2Shader         = this.compileShader(this.gl.FRAGMENT_SHADER, this.FluxBC2ShaderCode);        
         
@@ -77,7 +76,6 @@ class Shaders{
         this.outletBC0Program         = new GLProgram(this.gl, vertexShader, outletBC0Shader);
         this.outletBC1Program         = new GLProgram(this.gl, vertexShader, outletBC1Shader);
         this.outletBC2Program         = new GLProgram(this.gl, vertexShader, outletBC2Shader);
-        this.fluxVelProgram         = new GLProgram(this.gl, vertexShader, fluxVelShader);
         this.flux1Program         = new GLProgram(this.gl, vertexShader, flux1Shader);
         this.flux2Program         = new GLProgram(this.gl, vertexShader, flux2Shader);     
 
@@ -115,11 +113,52 @@ class Shaders{
             precision highp float;
 
             varying vec2 vTextCoord;
+            uniform float c;
+            uniform float u;
 
+            //-----getModelParams----
+            vec3 getModelParams(int index){
+                vec3 weight[3];
+                weight[0] = vec3(4.0/9.0, 1.0/9.0, 1.0/9.0);
+                weight[1] = vec3(1.0/9.0, 1.0/9.0, 1.0/36.0);
+                weight[2] = vec3(1.0/36.0, 1.0/36.0, 1.0/36.0);
+                
+                vec3 coordX[3];
+                coordX[0] = vec3(0.0, 1.0, 0.0);
+                coordX[1] = vec3(-1.0, 0.0, 1.0);
+                coordX[2] = vec3(-1.0, -1.0, 1.0);
+
+                vec3 coordY[3];
+                coordY[0] = vec3(0.0, 0.0, 1.0);
+                coordY[1] = vec3(0.0, -1.0, 1.0);
+                coordY[2] = vec3(1.0, -1.0, -1.0);
+
+                float ex = 0.0; float ey = 0.0; float wk = 0.0;
+                if (index == 0) {ex = coordX[0].x; ey = coordY[0].x; wk = weight[0].x; };
+                if (index == 1) {ex = coordX[0].y; ey = coordY[0].y; wk = weight[0].y; };
+                if (index == 2) {ex = coordX[0].z; ey = coordY[0].z; wk = weight[0].z; };
+                if (index == 3) {ex = coordX[1].x; ey = coordY[1].x; wk = weight[1].x; };
+                if (index == 4) {ex = coordX[1].y; ey = coordY[1].y; wk = weight[1].y; };
+                if (index == 5) {ex = coordX[1].z; ey = coordY[1].z; wk = weight[1].z; };
+                if (index == 6) {ex = coordX[2].x; ey = coordY[2].x; wk = weight[2].x; };
+                if (index == 7) {ex = coordX[2].y; ey = coordY[2].y; wk = weight[2].y; };
+                if (index == 8) {ex = coordX[2].z; ey = coordY[2].z; wk = weight[2].z; };
+                
+                return vec3(ex, ey, wk);
+            }
+            float getEquilibrium(float dencity, float velX, float velY, int index){
+                vec3 coords = getModelParams(index);
+                float cu = 3.0 * (coords.x*velX + coords.y*velY) / c;
+                float umagnitude = (velX * velX + velY * velY) / (c * c);
+                float feq = dencity * coords.z * (1.0 + cu + 0.5 * cu * cu - 1.5 * umagnitude);
+                return feq;
+            }
+
+            //---------MAIN---------------
             void main () {
-                float ux = 0.0;//0.1 * (1.0-4.0*(vTextCoord.y - 0.5)*(vTextCoord.y - 0.5));
+                float ux = u * (1.0 - 4.0 * (vTextCoord.y - 0.5) * (vTextCoord.y - 0.5));
                 float uy = 0.0;
-                float f0 = 4.0 * (1.0 - 1.5 * ux * ux - 1.5 * uy * uy) / 9.0;
+                float f0 = getEquilibrium(1.0, ux, uy, 0);
                 gl_FragColor = vec4(f0, 1.0, 1.0, 1.0);
             }
         `;
@@ -130,15 +169,56 @@ class Shaders{
             precision highp float;
 
             varying vec2 vTextCoord;
+            uniform float c;
+            uniform float u;
+            
+            //-----getModelParams----
+            vec3 getModelParams(int index){
+                vec3 weight[3];
+                weight[0] = vec3(4.0/9.0, 1.0/9.0, 1.0/9.0);
+                weight[1] = vec3(1.0/9.0, 1.0/9.0, 1.0/36.0);
+                weight[2] = vec3(1.0/36.0, 1.0/36.0, 1.0/36.0);
+                
+                vec3 coordX[3];
+                coordX[0] = vec3(0.0, 1.0, 0.0);
+                coordX[1] = vec3(-1.0, 0.0, 1.0);
+                coordX[2] = vec3(-1.0, -1.0, 1.0);
 
+                vec3 coordY[3];
+                coordY[0] = vec3(0.0, 0.0, 1.0);
+                coordY[1] = vec3(0.0, -1.0, 1.0);
+                coordY[2] = vec3(1.0, -1.0, -1.0);
+
+                float ex = 0.0; float ey = 0.0; float wk = 0.0;
+                if (index == 0) {ex = coordX[0].x; ey = coordY[0].x; wk = weight[0].x; };
+                if (index == 1) {ex = coordX[0].y; ey = coordY[0].y; wk = weight[0].y; };
+                if (index == 2) {ex = coordX[0].z; ey = coordY[0].z; wk = weight[0].z; };
+                if (index == 3) {ex = coordX[1].x; ey = coordY[1].x; wk = weight[1].x; };
+                if (index == 4) {ex = coordX[1].y; ey = coordY[1].y; wk = weight[1].y; };
+                if (index == 5) {ex = coordX[1].z; ey = coordY[1].z; wk = weight[1].z; };
+                if (index == 6) {ex = coordX[2].x; ey = coordY[2].x; wk = weight[2].x; };
+                if (index == 7) {ex = coordX[2].y; ey = coordY[2].y; wk = weight[2].y; };
+                if (index == 8) {ex = coordX[2].z; ey = coordY[2].z; wk = weight[2].z; };
+                
+                return vec3(ex, ey, wk);
+            }
+            float getEquilibrium(float dencity, float velX, float velY, int index){
+                vec3 coords = getModelParams(index);
+                float cu = 3.0 * (coords.x*velX + coords.y*velY) / c;
+                float umagnitude = (velX * velX + velY * velY) / (c * c);
+                float feq = dencity * coords.z * (1.0 + cu + 0.5 * cu * cu - 1.5 * umagnitude);
+                return feq;
+            }
+
+            //---------MAIN---------------
             void main () {
-                float ux = 0.0;//0.1 * (1.0-4.0*(vTextCoord.y - 0.5)*(vTextCoord.y - 0.5));
+                float ux = u * (1.0 - 4.0 * (vTextCoord.y - 0.5) * (vTextCoord.y - 0.5));
                 float uy = 0.0;
                 
-                float f1 = (1.0 + 3.0 * ux + 3.0 * ux * ux - 1.5 * uy * uy) / 9.0;
-                float f2 = (1.0 + 3.0 * uy + 3.0 * uy * uy - 1.5 * ux * ux) / 9.0;
-                float f3 = (1.0 - 3.0 * ux + 3.0 * ux * ux - 1.5 * uy * uy) / 9.0;
-                float f4 = (1.0 - 3.0 * uy + 3.0 * uy * uy - 1.5 * ux * ux) / 9.0;
+                float f1 = getEquilibrium(1.0, ux, uy, 1);
+                float f2 = getEquilibrium(1.0, ux, uy, 2);
+                float f3 = getEquilibrium(1.0, ux, uy, 3);
+                float f4 = getEquilibrium(1.0, ux, uy, 4);
                 
                 gl_FragColor = vec4(f1, f2, f3, f4);
             }
@@ -150,15 +230,56 @@ class Shaders{
             precision highp float;
 
             varying vec2 vTextCoord;
+            uniform float c;
+            uniform float u;
 
+            //-----getModelParams----
+            vec3 getModelParams(int index){
+                vec3 weight[3];
+                weight[0] = vec3(4.0/9.0, 1.0/9.0, 1.0/9.0);
+                weight[1] = vec3(1.0/9.0, 1.0/9.0, 1.0/36.0);
+                weight[2] = vec3(1.0/36.0, 1.0/36.0, 1.0/36.0);
+                
+                vec3 coordX[3];
+                coordX[0] = vec3(0.0, 1.0, 0.0);
+                coordX[1] = vec3(-1.0, 0.0, 1.0);
+                coordX[2] = vec3(-1.0, -1.0, 1.0);
+
+                vec3 coordY[3];
+                coordY[0] = vec3(0.0, 0.0, 1.0);
+                coordY[1] = vec3(0.0, -1.0, 1.0);
+                coordY[2] = vec3(1.0, -1.0, -1.0);
+
+                float ex = 0.0; float ey = 0.0; float wk = 0.0;
+                if (index == 0) {ex = coordX[0].x; ey = coordY[0].x; wk = weight[0].x; };
+                if (index == 1) {ex = coordX[0].y; ey = coordY[0].y; wk = weight[0].y; };
+                if (index == 2) {ex = coordX[0].z; ey = coordY[0].z; wk = weight[0].z; };
+                if (index == 3) {ex = coordX[1].x; ey = coordY[1].x; wk = weight[1].x; };
+                if (index == 4) {ex = coordX[1].y; ey = coordY[1].y; wk = weight[1].y; };
+                if (index == 5) {ex = coordX[1].z; ey = coordY[1].z; wk = weight[1].z; };
+                if (index == 6) {ex = coordX[2].x; ey = coordY[2].x; wk = weight[2].x; };
+                if (index == 7) {ex = coordX[2].y; ey = coordY[2].y; wk = weight[2].y; };
+                if (index == 8) {ex = coordX[2].z; ey = coordY[2].z; wk = weight[2].z; };
+                
+                return vec3(ex, ey, wk);
+            }
+            float getEquilibrium(float dencity, float velX, float velY, int index){
+                vec3 coords = getModelParams(index);
+                float cu = 3.0 * (coords.x*velX + coords.y*velY) / c;
+                float umagnitude = (velX * velX + velY * velY) / (c * c);
+                float feq = dencity * coords.z * (1.0 + cu + 0.5 * cu * cu - 1.5 * umagnitude);
+                return feq;
+            }
+
+            //---------MAIN---------------
             void main () {
-                float ux = 0.0;//0.1 * (1.0-4.0*(vTextCoord.y - 0.5)*(vTextCoord.y - 0.5));
+                float ux = u * (1.0 - 4.0 * (vTextCoord.y - 0.5) * (vTextCoord.y - 0.5));
                 float uy = 0.0;
 
-                float f5 = (1.0 + 3.0 * ux + 3.0 * uy + 3.0 * ux * ux + 3.0 * uy * uy + 9.0 * ux * uy) / 36.0;
-                float f6 = (1.0 - 3.0 * ux + 3.0 * uy + 3.0 * ux * ux + 3.0 * uy * uy - 9.0 * ux * uy) / 36.0;
-                float f7 = (1.0 - 3.0 * ux - 3.0 * uy + 3.0 * ux * ux + 3.0 * uy * uy + 9.0 * ux * uy) / 36.0;
-                float f8 = (1.0 + 3.0 * ux - 3.0 * uy + 3.0 * ux * ux + 3.0 * uy * uy - 9.0 * ux * uy) / 36.0;
+                float f5 = getEquilibrium(1.0, ux, uy, 5);
+                float f6 = getEquilibrium(1.0, ux, uy, 6);
+                float f7 = getEquilibrium(1.0, ux, uy, 7);
+                float f8 = getEquilibrium(1.0, ux, uy, 8);
                 gl_FragColor = vec4(f5, f6, f7, f8);
             }
         `;
@@ -200,6 +321,7 @@ class Shaders{
             uniform sampler2D uDistribution1;
             uniform sampler2D uDistribution2;
             uniform float c;
+            uniform float d;
             varying vec2 vTextCoord;
 
             void main () {
@@ -207,9 +329,9 @@ class Shaders{
                 vec4 f14 = texture2D(uDistribution1, vTextCoord).rgba;
                 vec4 f58 = texture2D(uDistribution2, vTextCoord).rgba;                
                 
-                if (vTextCoord.x >= 1.0 - 0.005)
+                if (vTextCoord.x >= 1.0 - d)
                 {
-                    vec2 coord = vTextCoord; coord.x -= 0.005;
+                    vec2 coord = vTextCoord; coord.x -= d;
                     f0 = texture2D(uDistribution0, coord).r;
                     f14 = texture2D(uDistribution1, coord).rgba;
                     f58 = texture2D(uDistribution2, coord).rgba;
@@ -225,37 +347,6 @@ class Shaders{
             }
         `;
         return calcShader;        
-    }
-    get FluxVelocityShaderCode() {
-        let fluxShader = `
-            precision highp float;
-
-            uniform sampler2D uDistribution0;
-            uniform sampler2D uDistribution1;
-            uniform sampler2D uDistribution2;
-            varying vec2 vTextCoord;
-
-            void main () {
-                float f0 = texture2D(uDistribution0, vTextCoord).r;
-                vec4 f14 = texture2D(uDistribution1, vTextCoord).rgba;
-                vec4 f58 = texture2D(uDistribution2, vTextCoord).rgba;
-
-                float rho = f0 + f14.r + f14.b + f14.g + f14.a + f58.r + f58.b + f58.g + f58.a;
-                float ux = f14.r + f58.r + f58.a - f14.b - f58.g - f58.b;
-                float uy = f14.g + f58.r + f58.g - f58.b - f58.a - f14.a;
-                ux = ux / rho;
-                uy = uy / rho;
-
-                if (vTextCoord.x <= 0.005)
-                {
-                    rho = 1.0; 
-                    ux = 0.1; uy = 0.0;
-                }
-
-                gl_FragColor = vec4(ux, uy, rho, 0.0);
-            }
-        `;
-        return fluxShader;        
     }
     //display
     get displayShaderCode() {
@@ -335,21 +426,23 @@ class Shaders{
             uniform sampler2D uDistribition1;
             uniform sampler2D uBodiesTexture;
             uniform float d;
+            uniform float c;
+            uniform float dx;
+            uniform float dy;
 
             void main () {
-                float rev = -1.0 * d; float dx = 0.1;
+                float rev = -1.0 * d; 
 
                 vec2 coord = vTextCoord; coord.x += 1.0 * rev * dx;
-                if (coord.x > 1.0) coord.x = 1.0;
                 float f1 = texture2D(uDistribition1, coord).r;
 
-                coord = vTextCoord; coord.y += 1.0 * rev; if (coord.x > 1.0) coord.x = 1.0;
+                coord = vTextCoord; coord.y += 1.0 * rev * dy;
                 float f2 = texture2D(uDistribition1, coord).g;
 
-                coord = vTextCoord; coord.x -= 1.0 * rev * dx; if (coord.x > 1.0) coord.x = 1.0;
+                coord = vTextCoord; coord.x -= 1.0 * rev * dx;
                 float f3 = texture2D(uDistribition1, coord).b;
 
-                coord = vTextCoord; coord.y -= 1.0 * rev; if (coord.x > 1.0) coord.x = 1.0;
+                coord = vTextCoord; coord.y -= 1.0 * rev * dy;
                 float f4 = texture2D(uDistribition1, coord).a;
 
                 if (vTextCoord.y >= 1.0 - d)
@@ -358,25 +451,10 @@ class Shaders{
                     f2 = f4;
 
                 if (texture2D(uBodiesTexture, vTextCoord).r == 1.0){
-                    coord = vTextCoord; coord.x += 1.0 * rev;
-                    if (coord.x > 1.0) coord.x = 1.0; if (coord.x < 0.0) coord.x = 0.0;
-                    //if (texture2D(uBodiesTexture, coord).r == 0.0)
                         f3 = f1;
-
-                    coord = vTextCoord; coord.y += 1.0 * rev;
-                    if (coord.x > 1.0) coord.x = 1.0; if (coord.x < 0.0) coord.x = 0.0;
-                    //if (texture2D(uBodiesTexture, coord).r == 0.0)
                         f4 = f2;
-
-                    coord = vTextCoord; coord.x -= 1.0 * rev;
-                    if (coord.x > 1.0) coord.x = 1.0; if (coord.x < 0.0) coord.x = 0.0;
-                    //if (texture2D(uBodiesTexture, coord).r == 0.0)
-                        f1 = f3;
-
-                    coord = vTextCoord; coord.y -= 1.0 * rev;
-                    if (coord.x > 1.0) coord.x = 1.0; if (coord.x < 0.0) coord.x = 0.0;
-                    //if (texture2D(uBodiesTexture, coord).r == 0.0)
-                        f2 = f4;
+                        //f1 = f3;
+                        //f2 = f4;
                 };
 
                 gl_FragColor = vec4(f1, f2, f3, f4);
@@ -392,24 +470,23 @@ class Shaders{
             uniform sampler2D uDistribition2;
             uniform sampler2D uBodiesTexture;
             uniform float d;
+            uniform float c;
+            uniform float dx;
+            uniform float dy;
 
             void main () {
-                float rev = -1.0 * d; float dx = 0.1;
+                float rev = -1.0 * d; 
 
-                vec2 coord = vTextCoord; coord.x += 1.0 * rev; coord.y += 1.0 * rev; 
-                if (coord.x > 1.0) coord.x = 1.0; if (coord.x < 0.0) coord.x = 0.0;
+                vec2 coord = vTextCoord; coord.x += 1.0 * rev * dx; coord.y += 1.0 * rev * dy; 
                 float f5 = texture2D(uDistribition2, coord).r;
 
-                coord = vTextCoord; coord.x -= 1.0 * rev; coord.y += 1.0 * rev; 
-                if (coord.x > 1.0) coord.x = 1.0; if (coord.x < 0.0) coord.x = 0.0;
+                coord = vTextCoord; coord.x -= 1.0 * rev * dx; coord.y += 1.0 * rev * dy; 
                 float f6 = texture2D(uDistribition2, coord).g;
 
-                coord = vTextCoord; coord.x -= 1.0 * rev; coord.y -= 1.0 * rev; 
-                if (coord.x > 1.0) coord.x = 1.0; if (coord.x < 0.0) coord.x = 0.0;
+                coord = vTextCoord; coord.x -= 1.0 * rev * dx; coord.y -= 1.0 * rev * dy; 
                 float f7 = texture2D(uDistribition2, coord).b;
 
-                coord = vTextCoord; coord.x += 1.0 * rev; coord.y -= 1.0 * rev; 
-                if (coord.x > 1.0) coord.x = 1.0; if (coord.x < 0.0) coord.x = 0.0;
+                coord = vTextCoord; coord.x += 1.0 * rev * dx; coord.y -= 1.0 * rev * dy; 
                 float f8 = texture2D(uDistribition2, coord).a;
 
                 if (vTextCoord.y >= 1.0 - d)
@@ -422,21 +499,10 @@ class Shaders{
                     }
 
                 if (texture2D(uBodiesTexture, vTextCoord).r > 0.0){
-                    coord = vTextCoord; coord.x += 1.0 * rev * dx; coord.y += 1.0 * rev;
-                    //if (texture2D(uBodiesTexture, coord).r == 0.0)
                         f7 = f5;
-
-                    coord = vTextCoord; coord.x -= 1.0 * rev * dx; coord.y += 1.0 * rev;
-                    //if (texture2D(uBodiesTexture, coord).r == 0.0)
                         f8 = f6;
-
-                    coord = vTextCoord; coord.x -= 1.0 * rev * dx; coord.y -= 1.0 * rev;
-                    //if (texture2D(uBodiesTexture, coord).r == 0.0)
-                        f5 = f7;
-
-                    coord = vTextCoord; coord.x += 1.0 * rev * dx; coord.y -= 1.0 * rev;
-                    //if (texture2D(uBodiesTexture, coord).r == 0.0)
-                        f6 = f8;
+                        //f5 = f7;
+                        //f6 = f8;
                 };
 
                 gl_FragColor = vec4(f5, f6, f7, f8);
@@ -570,6 +636,44 @@ class Shaders{
             uniform sampler2D uVelocity;
             uniform sampler2D uDistribition0;
             uniform float d;
+            uniform float c;
+
+            vec3 getModelParams(int index){
+                vec3 weight[3];
+                weight[0] = vec3(4.0/9.0, 1.0/9.0, 1.0/9.0);
+                weight[1] = vec3(1.0/9.0, 1.0/9.0, 1.0/36.0);
+                weight[2] = vec3(1.0/36.0, 1.0/36.0, 1.0/36.0);
+                
+                vec3 coordX[3];
+                coordX[0] = vec3(0.0, 1.0, 0.0);
+                coordX[1] = vec3(-1.0, 0.0, 1.0);
+                coordX[2] = vec3(-1.0, -1.0, 1.0);
+
+                vec3 coordY[3];
+                coordY[0] = vec3(0.0, 0.0, 1.0);
+                coordY[1] = vec3(0.0, -1.0, 1.0);
+                coordY[2] = vec3(1.0, -1.0, -1.0);
+
+                float ex = 0.0; float ey = 0.0; float wk = 0.0;
+                if (index == 0) {ex = coordX[0].x; ey = coordY[0].x; wk = weight[0].x; };
+                if (index == 1) {ex = coordX[0].y; ey = coordY[0].y; wk = weight[0].y; };
+                if (index == 2) {ex = coordX[0].z; ey = coordY[0].z; wk = weight[0].z; };
+                if (index == 3) {ex = coordX[1].x; ey = coordY[1].x; wk = weight[1].x; };
+                if (index == 4) {ex = coordX[1].y; ey = coordY[1].y; wk = weight[1].y; };
+                if (index == 5) {ex = coordX[1].z; ey = coordY[1].z; wk = weight[1].z; };
+                if (index == 6) {ex = coordX[2].x; ey = coordY[2].x; wk = weight[2].x; };
+                if (index == 7) {ex = coordX[2].y; ey = coordY[2].y; wk = weight[2].y; };
+                if (index == 8) {ex = coordX[2].z; ey = coordY[2].z; wk = weight[2].z; };
+                
+                return vec3(ex, ey, wk);
+            }
+            float getEquilibrium(float dencity, float velX, float velY, int index){
+                vec3 coords = getModelParams(index);
+                float cu = 3.0 * (coords.x*velX + coords.y*velY) / c;
+                float umagnitude = (velX * velX + velY * velY) / (c * c);
+                float feq = dencity * coords.z * (1.0 + cu + 0.5 * cu * cu - 1.5 * umagnitude);
+                return feq;
+            }
 
             void main () {
                 vec2 coord = vTextCoord;
@@ -594,6 +698,7 @@ class Shaders{
             uniform sampler2D uVelocity;
             uniform sampler2D uDistribition1;
             uniform float d;
+            uniform float c;
 
             void main () {
                 vec2 coord = vTextCoord;
@@ -645,6 +750,7 @@ class Shaders{
             uniform sampler2D uVelocity;
             uniform sampler2D uDistribition2;
             uniform float d;
+            uniform float c;
 
             void main () {
                 vec2 coord = vTextCoord;
@@ -697,6 +803,8 @@ class Shaders{
             uniform sampler2D uDistribition1;
             uniform sampler2D uDistribition2;
             uniform sampler2D uVelocity;
+            uniform float c;
+            uniform float uin;
 
             void main () {
                 float rho = texture2D(uVelocity, vTextCoord).b;
@@ -730,6 +838,8 @@ class Shaders{
             uniform sampler2D uDistribition1;
             uniform sampler2D uDistribition2;
             uniform sampler2D uVelocity;
+            uniform float c;
+            uniform float uin;
 
             void main () {
                 float rho = texture2D(uVelocity, vTextCoord).b; 
@@ -766,19 +876,15 @@ class Shaders{
 
             void main () {
                 float R = 0.0625;
-                vec2 center; center.x= 1.0; center.y = 0.5;
+                vec2 center; center.x = 0.2; center.y = 0.5;
                 float dx = 0.1;
-                float r = (vTextCoord.x - center.x * dx)*(vTextCoord.x - center.x * dx)/dx + 
+                float r = (vTextCoord.x - center.x)*(vTextCoord.x - center.x) / dx + 
                             (vTextCoord.y - center.y) * (vTextCoord.y - center.y);
                 
                 if (r <= R*R)
                     gl_FragColor = vec4(1.0, 0.0, 0.0, 0.0);
                 else
                     gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-                //if (vTextCoord.x >= 0.24 && vTextCoord.x <= 0.25 && vTextCoord.y >= 0.4 && vTextCoord.y <= 0.6)
-                //    gl_FragColor = vec4(1.0, 0.0, 0.0, 0.0);
-                //else
-                //    gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
             }
         `;
         return initShader;
@@ -796,10 +902,8 @@ class Shaders{
     resizeCanvas();
 
     const GRIDN = 200.0;
-    const DOMAINSIZEX = 1.0;
+    const DOMAINSIZEX = 2.0;
     const DOMAINSIZEY = 1.0;
-    const GRIDX = DOMAINSIZEX * GRIDN;
-    const GRIDY = DOMAINSIZEY * GRIDN;
     const CELLSIZE = 1.0 / GRIDN;
     const UIN = 0.1;
     const L = 0.125;
@@ -809,7 +913,7 @@ class Shaders{
     const RE = 200.0;
     const VISCOSITY = UIN * L / RE;
     const TAU = 3.0 * VISCOSITY * GRIDN + 0.5;
-    console.log(TAU, VISCOSITY);
+    console.log(`TAU = ${TAU}, VISCOSITY = ${VISCOSITY}`);
 
     let texId = -1;
 
@@ -866,12 +970,12 @@ class Shaders{
         }
     }
     //support_linear_float ? gl.LINEAR : gl.NEAREST
-    let distribution0 = createDoubleFBO(GRIDX, GRIDY, gl.RGBA, gl.FLOAT, gl.NEAREST);
-    let distribution1 = createDoubleFBO(GRIDX, GRIDY, gl.RGBA, gl.FLOAT, gl.NEAREST);
-    let distribution2 = createDoubleFBO(GRIDX, GRIDY, gl.RGBA, gl.FLOAT, gl.NEAREST);
+    let distribution0 = createDoubleFBO(GRIDN, GRIDN, gl.RGBA, gl.FLOAT, support_linear_float ? gl.LINEAR : gl.NEAREST);
+    let distribution1 = createDoubleFBO(GRIDN, GRIDN, gl.RGBA, gl.FLOAT, support_linear_float ? gl.LINEAR : gl.NEAREST);
+    let distribution2 = createDoubleFBO(GRIDN, GRIDN, gl.RGBA, gl.FLOAT, support_linear_float ? gl.LINEAR : gl.NEAREST);
 
-    let velocity    = createFBO(GRIDX, GRIDY, gl.RGBA, gl.FLOAT, support_linear_float ? gl.LINEAR : gl.NEAREST);
-    let bodies      = createFBO(GRIDX, GRIDY, gl.RGBA, gl.FLOAT, support_linear_float ? gl.LINEAR : gl.NEAREST);
+    let velocity    = createFBO(GRIDN, GRIDN, gl.RGBA, gl.FLOAT, support_linear_float ? gl.LINEAR : gl.NEAREST);
+    let bodies      = createFBO(GRIDN, GRIDN, gl.RGBA, gl.FLOAT, support_linear_float ? gl.LINEAR : gl.NEAREST);
 
     let shaders = new Shaders(gl); let i = 0;
     Initialize();
@@ -879,14 +983,20 @@ class Shaders{
     LBMLoop();
 
     function Initialize () {
-        gl.viewport(0, 0, GRIDX, GRIDY);
+        gl.viewport(0, 0, GRIDN, GRIDN);
         shaders.initializeDistribution0Program.use();
+        gl.uniform1f(shaders.initializeDistribution0Program.uniforms.c, C);
+        gl.uniform1f(shaders.initializeDistribution0Program.uniforms.u, UIN);
         display(distribution0.first[1]);
 
         shaders.initializeDistribution1Program.use();
+        gl.uniform1f(shaders.initializeDistribution1Program.uniforms.c, C);
+        gl.uniform1f(shaders.initializeDistribution1Program.uniforms.u, UIN);
         display(distribution1.first[1]);
 
         shaders.initializeDistribution2Program.use();
+        gl.uniform1f(shaders.initializeDistribution2Program.uniforms.c, C);
+        gl.uniform1f(shaders.initializeDistribution2Program.uniforms.u, UIN);
         display(distribution2.first[1]);
 
         initializeCircleBody();
@@ -894,7 +1004,7 @@ class Shaders{
     }
     function LBMLoop() {
         resizeCanvas();
-        gl.viewport(0, 0, GRIDX, GRIDY);
+        gl.viewport(0, 0, GRIDN, GRIDN);
 
         collisionStep();
         streamStep();
@@ -953,6 +1063,9 @@ class Shaders{
         gl.uniform1i(shaders.stream1Program.uniforms.uDistribition1, distribution1.first[2]);
         gl.uniform1i(shaders.stream1Program.uniforms.uBodiesTexture, bodies[2]);
         gl.uniform1f(shaders.stream1Program.uniforms.d, CELLSIZE);
+        gl.uniform1f(shaders.stream1Program.uniforms.c, C);
+        gl.uniform1f(shaders.stream1Program.uniforms.dx, 1.0 / DOMAINSIZEX);
+        gl.uniform1f(shaders.stream1Program.uniforms.dy, 1.0 / DOMAINSIZEY);
         display(distribution1.second[1]);
         distribution1.swap();
 
@@ -960,21 +1073,20 @@ class Shaders{
         gl.uniform1i(shaders.stream2Program.uniforms.uDistribition2, distribution2.first[2]);
         gl.uniform1i(shaders.stream2Program.uniforms.uBodiesTexture, bodies[2]);
         gl.uniform1f(shaders.stream2Program.uniforms.d, CELLSIZE);
+        gl.uniform1f(shaders.stream2Program.uniforms.c, C);
+        gl.uniform1f(shaders.stream2Program.uniforms.dx, 1.0 / DOMAINSIZEX);
+        gl.uniform1f(shaders.stream2Program.uniforms.dy, 1.0 / DOMAINSIZEY);
         display(distribution2.second[1]);
         distribution2.swap();
     }
-    function fluxBC(){
-        shaders.fluxVelProgram.use();
-        gl.uniform1i(shaders.fluxVelProgram.uniforms.uDistribution0, distribution0.first[2]);
-        gl.uniform1i(shaders.fluxVelProgram.uniforms.uDistribution1, distribution1.first[2]);
-        gl.uniform1i(shaders.fluxVelProgram.uniforms.uDistribution2, distribution2.first[2]);
-        display(velocity[1]);
-
+    function fluxBC() {
         shaders.flux1Program.use();
         gl.uniform1i(shaders.flux1Program.uniforms.uDistribition0, distribution0.first[2]);
         gl.uniform1i(shaders.flux1Program.uniforms.uDistribition1, distribution1.first[2]);
         gl.uniform1i(shaders.flux1Program.uniforms.uDistribition2, distribution2.first[2]);
         gl.uniform1i(shaders.flux1Program.uniforms.uVelocity, velocity[2]);
+        gl.uniform1f(shaders.flux1Program.uniforms.c, C);
+        gl.uniform1f(shaders.flux1Program.uniforms.uin, C);
         display(distribution1.second[1]);
         distribution1.swap();
 
@@ -983,6 +1095,8 @@ class Shaders{
         gl.uniform1i(shaders.flux2Program.uniforms.uDistribition1, distribution1.first[2]);
         gl.uniform1i(shaders.flux2Program.uniforms.uDistribition2, distribution2.first[2]);
         gl.uniform1i(shaders.flux2Program.uniforms.uVelocity, velocity[2]);
+        gl.uniform1f(shaders.flux2Program.uniforms.c, C);
+        gl.uniform1f(shaders.flux2Program.uniforms.uin, C);
         display(distribution2.second[1]);
         distribution2.swap();
     }
@@ -992,6 +1106,7 @@ class Shaders{
         gl.uniform1i(shaders.calculateOutletVelocityProgram.uniforms.uDistribution1, distribution1.first[2]);
         gl.uniform1i(shaders.calculateOutletVelocityProgram.uniforms.uDistribution2, distribution2.first[2]);
         gl.uniform1f(shaders.calculateOutletVelocityProgram.uniforms.c, C);
+        gl.uniform1f(shaders.calculateOutletVelocityProgram.uniforms.d, CELLSIZE);
 
         display(velocity[1]);
 
@@ -1001,6 +1116,7 @@ class Shaders{
         gl.uniform1i(shaders.outletBC0Program.uniforms.uDistribition0, distribution0.first[2]);
         gl.uniform1i(shaders.outletBC0Program.uniforms.uVelocity, velocity[2]);
         gl.uniform1f(shaders.outletBC0Program.uniforms.d, CELLSIZE);
+        gl.uniform1f(shaders.outletBC0Program.uniforms.c, C);
 
         display(distribution0.second[1]);
         distribution0.swap();
@@ -1009,6 +1125,7 @@ class Shaders{
         gl.uniform1i(shaders.outletBC1Program.uniforms.uDistribition1, distribution1.first[2]);
         gl.uniform1i(shaders.outletBC1Program.uniforms.uVelocity, velocity[2]);
         gl.uniform1f(shaders.outletBC1Program.uniforms.d, CELLSIZE);
+        gl.uniform1f(shaders.outletBC1Program.uniforms.c, C);
 
         display(distribution1.second[1]);
         distribution1.swap();
@@ -1017,6 +1134,7 @@ class Shaders{
         gl.uniform1i(shaders.outletBC2Program.uniforms.uDistribition2, distribution2.first[2]);
         gl.uniform1i(shaders.outletBC2Program.uniforms.uVelocity, velocity[2]);
         gl.uniform1f(shaders.outletBC2Program.uniforms.d, CELLSIZE);
+        gl.uniform1f(shaders.outletBC2Program.uniforms.c, C);
 
         display(distribution2.second[1]);
         distribution2.swap();
